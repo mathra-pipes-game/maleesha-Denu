@@ -1,0 +1,276 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile and PII for Passenger, Driver, and Admin roles.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User full name" },
+        "email": { "type": "string", "description": "Verified Google account email" },
+        "phone": { "type": "string", "description": "Sri Lankan phone number (+94...)" },
+        "preferredLanguage": { "type": "string", "enum": ["si", "en"], "description": "Primary UI language" },
+        "activeMode": { "type": "string", "enum": ["passenger", "driver", "admin"], "description": "Current active app role" },
+        "emergencyContact": { "type": "string", "description": "Emergency SOS contact phone" },
+        "isSuspended": { "type": "boolean", "description": "Admin suspension flag" },
+        "ratingAvg": { "type": "number", "description": "Average rating score" },
+        "totalTrips": { "type": "integer", "description": "Total completed trips count" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": ["userId", "displayName", "preferredLanguage", "activeMode", "isSuspended", "createdAt", "updatedAt"]
+    },
+    "DriverProfile": {
+      "title": "DriverProfile",
+      "description": "Operational driver status, live GPS coordinates, and vehicle metadata.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Driver Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Driver public display name" },
+        "vehicleType": { "type": "string", "enum": ["TUK_TUK", "NANO", "MINI", "SEDAN", "SUV", "VAN", "PREMIUM"] },
+        "vehicleModel": { "type": "string", "description": "Vehicle make and model" },
+        "plateNumber": { "type": "string", "description": "Sri Lanka registration plate" },
+        "vehicleColor": { "type": "string", "description": "Vehicle color" },
+        "verificationStatus": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"] },
+        "isOnline": { "type": "boolean", "description": "Driver availability toggle" },
+        "latitude": { "type": "number", "description": "Live GPS latitude" },
+        "longitude": { "type": "number", "description": "Live GPS longitude" },
+        "heading": { "type": "number", "description": "Compass heading degrees" },
+        "gpsAccuracyMeters": { "type": "number", "description": "Fused location accuracy in meters" },
+        "ratingAvg": { "type": "number", "description": "Driver average rating" },
+        "completedTrips": { "type": "integer", "description": "Completed trips count" },
+        "totalEarningsLkr": { "type": "number", "description": "Cumulative LKR earnings" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "vehicleType", "vehicleModel", "plateNumber", "verificationStatus", "isOnline", "latitude", "longitude", "createdAt", "updatedAt"]
+    },
+    "DriverDocument": {
+      "title": "DriverDocument",
+      "description": "Private KYC and licence/vehicle verification documents for a driver.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "nicNumber": { "type": "string" },
+        "licenceNumber": { "type": "string" },
+        "licenceImageUri": { "type": "string" },
+        "vehicleDocImageUri": { "type": "string" },
+        "insuranceExpiry": { "type": "string" },
+        "verificationStatus": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "reviewNotes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "nicNumber", "licenceNumber", "verificationStatus", "createdAt", "updatedAt"]
+    },
+    "FareSetting": {
+      "title": "FareSetting",
+      "description": "Admin-configurable LKR fare tariff per Sri Lankan vehicle category.",
+      "type": "object",
+      "properties": {
+        "vehicleType": { "type": "string", "enum": ["TUK_TUK", "NANO", "MINI", "SEDAN", "SUV", "VAN", "PREMIUM"] },
+        "displayNameEn": { "type": "string" },
+        "displayNameSi": { "type": "string" },
+        "baseFareLkr": { "type": "number" },
+        "perKmRateLkr": { "type": "number" },
+        "perMinRateLkr": { "type": "number" },
+        "waitingPerMinRateLkr": { "type": "number" },
+        "minFareLkr": { "type": "number" },
+        "seatCapacity": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "updatedBy": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vehicleType", "displayNameEn", "displayNameSi", "baseFareLkr", "perKmRateLkr", "perMinRateLkr", "waitingPerMinRateLkr", "minFareLkr", "seatCapacity", "isActive", "updatedAt"]
+    },
+    "Trip": {
+      "title": "Trip",
+      "description": "Complete ride-hailing trip lifecycle, meter telemetry, and digital receipt.",
+      "type": "object",
+      "properties": {
+        "passengerId": { "type": "string" },
+        "passengerName": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "vehicleType": { "type": "string", "enum": ["TUK_TUK", "NANO", "MINI", "SEDAN", "SUV", "VAN", "PREMIUM"] },
+        "vehiclePlate": { "type": "string" },
+        "pickupAddress": { "type": "string" },
+        "pickupLat": { "type": "number" },
+        "pickupLng": { "type": "number" },
+        "dropoffAddress": { "type": "string" },
+        "dropoffLat": { "type": "number" },
+        "dropoffLng": { "type": "number" },
+        "estimatedDistanceKm": { "type": "number" },
+        "estimatedDurationMin": { "type": "integer" },
+        "estimatedFareLkr": { "type": "number" },
+        "status": { "type": "string", "enum": ["REQUESTED", "ACCEPTED", "DRIVER_ARRIVED", "STARTED", "COMPLETED", "CANCELLED"] },
+        "paymentMethod": { "type": "string", "enum": ["CASH", "ONLINE_CARD", "LANKA_QR"] },
+        "paymentStatus": { "type": "string", "enum": ["PENDING", "PAID_CASH", "AWAITING_GATEWAY", "REFUND_REQUESTED"] },
+        "meterDistanceKm": { "type": "number" },
+        "meterDurationSec": { "type": "integer" },
+        "meterWaitingSec": { "type": "integer" },
+        "baseFareLkr": { "type": "number" },
+        "distanceChargeLkr": { "type": "number" },
+        "timeChargeLkr": { "type": "number" },
+        "waitingChargeLkr": { "type": "number" },
+        "additionalChargesLkr": { "type": "number" },
+        "finalFareLkr": { "type": "number" },
+        "driverLat": { "type": "number" },
+        "driverLng": { "type": "number" },
+        "driverHeading": { "type": "number" },
+        "lastGpsTimestampMs": { "type": "integer" },
+        "lastGpsAccuracyM": { "type": "number" },
+        "promoCode": { "type": "string" },
+        "discountLkr": { "type": "number" },
+        "cancellationReason": { "type": "string" },
+        "cancelledBy": { "type": "string" },
+        "passengerRating": { "type": "integer" },
+        "passengerReview": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["passengerId", "passengerName", "vehicleType", "pickupAddress", "pickupLat", "pickupLng", "dropoffAddress", "dropoffLat", "dropoffLng", "estimatedDistanceKm", "estimatedDurationMin", "estimatedFareLkr", "status", "paymentMethod", "paymentStatus", "createdAt", "updatedAt"]
+    },
+    "GpsBreadcrumb": {
+      "title": "GpsBreadcrumb",
+      "description": "Validated GPS breadcrumb and taxi meter snapshot along a trip.",
+      "type": "object",
+      "properties": {
+        "tripId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "passengerId": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "accuracyMeters": { "type": "number" },
+        "speedMps": { "type": "number" },
+        "cumulativeDistanceKm": { "type": "number" },
+        "runningFareLkr": { "type": "number" },
+        "recordedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tripId", "driverId", "passengerId", "latitude", "longitude", "accuracyMeters", "cumulativeDistanceKm", "runningFareLkr", "recordedAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "Bilingual user notification item.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "titleEn": { "type": "string" },
+        "titleSi": { "type": "string" },
+        "bodyEn": { "type": "string" },
+        "bodySi": { "type": "string" },
+        "type": { "type": "string", "enum": ["TRIP", "DRIVER", "PROMO", "SYSTEM", "SOS"] },
+        "tripId": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "titleEn", "titleSi", "bodyEn", "bodySi", "type", "isRead", "createdAt"]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Customer support ticket or SOS/trip complaint.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "tripId": { "type": "string" },
+        "category": { "type": "string", "enum": ["FARE_DISPUTE", "DRIVER_BEHAVIOR", "SAFETY_SOS", "PAYMENT", "LOST_ITEM", "OTHER"] },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "IN_REVIEW", "RESOLVED"] },
+        "adminResponse": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "category", "subject", "description", "status", "createdAt", "updatedAt"]
+    },
+    "Promotion": {
+      "title": "Promotion",
+      "description": "Active Sri Lanka promo code configuration.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "titleEn": { "type": "string" },
+        "titleSi": { "type": "string" },
+        "discountPercent": { "type": "integer" },
+        "maxDiscountLkr": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "titleEn", "titleSi", "discountPercent", "maxDiscountLkr", "isActive", "createdAt", "updatedAt"]
+    },
+    "AdminAccount": {
+      "title": "AdminAccount",
+      "description": "Trusted administrator account record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "OPERATIONS", "FINANCE"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "role", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and admin action audit log.",
+      "type": "object",
+      "properties": {
+        "actorUid": { "type": "string" },
+        "actorEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "action", "targetType", "targetId", "details", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profiles isolated by userId"
+    },
+    "/drivers/{driverId}": {
+      "schema": { "$ref": "#/entities/DriverProfile" },
+      "description": "Operational driver profiles and live GPS coordinates"
+    },
+    "/driver_documents/{driverId}": {
+      "schema": { "$ref": "#/entities/DriverDocument" },
+      "description": "Private driver KYC documents and admin review notes"
+    },
+    "/fare_settings/{vehicleType}": {
+      "schema": { "$ref": "#/entities/FareSetting" },
+      "description": "Vehicle category fare configurations in LKR"
+    },
+    "/trips/{tripId}": {
+      "schema": { "$ref": "#/entities/Trip" },
+      "description": "Ride requests, active trips, digital meter state, and receipts"
+    },
+    "/trips/{tripId}/gps_history/{pointId}": {
+      "schema": { "$ref": "#/entities/GpsBreadcrumb" },
+      "description": "Validated GPS location breadcrumbs and running fare log"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "User-scoped bilingual notifications"
+    },
+    "/complaints/{complaintId}": {
+      "schema": { "$ref": "#/entities/Complaint" },
+      "description": "Customer support tickets and SOS incident reports"
+    },
+    "/promotions/{promoId}": {
+      "schema": { "$ref": "#/entities/Promotion" },
+      "description": "Active promotional discount codes"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminAccount" },
+      "description": "Trusted admin role registry"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Append-only security and admin audit trail"
+    }
+  }
+}

@@ -1,0 +1,442 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything unless explicitly permitted
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+             'email_verified' in request.auth.token &&
+             request.auth.token.email_verified == true &&
+             'email' in request.auth.token &&
+             request.auth.token.email == 'hirunideshani07@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() ||
+             (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isApprovedDriver() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/drivers/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.verificationStatus == 'APPROVED';
+    }
+
+    function isValidVehicleType(vt) {
+      return vt in ['TUK_TUK', 'NANO', 'MINI', 'SEDAN', 'SUV', 'VAN', 'PREMIUM'];
+    }
+
+    function isValidTripStatus(s) {
+      return s in ['REQUESTED', 'ACCEPTED', 'DRIVER_ARRIVED', 'STARTED', 'COMPLETED', 'CANCELLED'];
+    }
+
+    // --- Validation Helpers ---
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 160)) &&
+             (!('phone' in data) || data.phone == null || (data.phone is string && data.phone.size() <= 24)) &&
+             data.preferredLanguage in ['si', 'en'] &&
+             data.activeMode in ['passenger', 'driver', 'admin'] &&
+             (!('emergencyContact' in data) || data.emergencyContact == null || (data.emergencyContact is string && data.emergencyContact.size() <= 24)) &&
+             data.isSuspended is bool &&
+             (!('ratingAvg' in data) || data.ratingAvg is number) &&
+             (!('totalTrips' in data) || data.totalTrips is int) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDriverProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             isValidVehicleType(data.vehicleType) &&
+             data.vehicleModel is string && data.vehicleModel.size() >= 1 && data.vehicleModel.size() <= 80 &&
+             data.plateNumber is string && data.plateNumber.size() >= 2 && data.plateNumber.size() <= 24 &&
+             (!('vehicleColor' in data) || data.vehicleColor == null || (data.vehicleColor is string && data.vehicleColor.size() <= 32)) &&
+             data.verificationStatus in ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'] &&
+             data.isOnline is bool &&
+             data.latitude is number && data.latitude >= -90.0 && data.latitude <= 90.0 &&
+             data.longitude is number && data.longitude >= -180.0 && data.longitude <= 180.0 &&
+             (!('heading' in data) || data.heading is number) &&
+             (!('gpsAccuracyMeters' in data) || data.gpsAccuracyMeters is number) &&
+             (!('ratingAvg' in data) || data.ratingAvg is number) &&
+             (!('completedTrips' in data) || data.completedTrips is int) &&
+             (!('totalEarningsLkr' in data) || data.totalEarningsLkr is number) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDriverDocument(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.nicNumber is string && data.nicNumber.size() >= 5 && data.nicNumber.size() <= 24 &&
+             data.licenceNumber is string && data.licenceNumber.size() >= 4 && data.licenceNumber.size() <= 32 &&
+             (!('licenceImageUri' in data) || data.licenceImageUri == null || (data.licenceImageUri is string && data.licenceImageUri.size() <= 500)) &&
+             (!('vehicleDocImageUri' in data) || data.vehicleDocImageUri == null || (data.vehicleDocImageUri is string && data.vehicleDocImageUri.size() <= 500)) &&
+             (!('insuranceExpiry' in data) || data.insuranceExpiry == null || (data.insuranceExpiry is string && data.insuranceExpiry.size() <= 32)) &&
+             data.verificationStatus in ['PENDING', 'APPROVED', 'REJECTED'] &&
+             (!('reviewNotes' in data) || data.reviewNotes == null || (data.reviewNotes is string && data.reviewNotes.size() <= 300)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidFareSetting(data) {
+      return isValidVehicleType(data.vehicleType) &&
+             data.displayNameEn is string && data.displayNameEn.size() >= 1 && data.displayNameEn.size() <= 40 &&
+             data.displayNameSi is string && data.displayNameSi.size() >= 1 && data.displayNameSi.size() <= 60 &&
+             data.baseFareLkr is number && data.baseFareLkr >= 0 &&
+             data.perKmRateLkr is number && data.perKmRateLkr >= 0 &&
+             data.perMinRateLkr is number && data.perMinRateLkr >= 0 &&
+             data.waitingPerMinRateLkr is number && data.waitingPerMinRateLkr >= 0 &&
+             data.minFareLkr is number && data.minFareLkr >= 0 &&
+             data.seatCapacity is int && data.seatCapacity >= 1 && data.seatCapacity <= 20 &&
+             data.isActive is bool &&
+             (!('updatedBy' in data) || data.updatedBy == null || (data.updatedBy is string && data.updatedBy.size() <= 128)) &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidTrip(data) {
+      return data.passengerId is string && data.passengerId.size() <= 128 &&
+             data.passengerName is string && data.passengerName.size() <= 80 &&
+             (!('driverId' in data) || data.driverId == null || (data.driverId is string && data.driverId.size() <= 128)) &&
+             (!('driverName' in data) || data.driverName == null || (data.driverName is string && data.driverName.size() <= 80)) &&
+             isValidVehicleType(data.vehicleType) &&
+             data.pickupAddress is string && data.pickupAddress.size() <= 200 &&
+             data.pickupLat is number && data.pickupLng is number &&
+             data.dropoffAddress is string && data.dropoffAddress.size() <= 200 &&
+             data.dropoffLat is number && data.dropoffLng is number &&
+             data.estimatedDistanceKm is number && data.estimatedDistanceKm >= 0 &&
+             data.estimatedDurationMin is int && data.estimatedDurationMin >= 0 &&
+             data.estimatedFareLkr is number && data.estimatedFareLkr >= 0 &&
+             isValidTripStatus(data.status) &&
+             data.paymentMethod in ['CASH', 'ONLINE_CARD', 'LANKA_QR'] &&
+             data.paymentStatus in ['PENDING', 'PAID_CASH', 'AWAITING_GATEWAY', 'REFUND_REQUESTED'] &&
+             (!('meterDistanceKm' in data) || data.meterDistanceKm is number) &&
+             (!('finalFareLkr' in data) || data.finalFareLkr is number) &&
+             (!('passengerRating' in data) || data.passengerRating is int) &&
+             (!('passengerReview' in data) || data.passengerReview == null || (data.passengerReview is string && data.passengerReview.size() <= 400)) &&
+             (!('cancellationReason' in data) || data.cancellationReason == null || (data.cancellationReason is string && data.cancellationReason.size() <= 200)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidGpsBreadcrumb(data) {
+      return data.tripId is string && data.tripId.size() >= 1 && data.tripId.size() <= 128 &&
+             data.driverId is string && data.driverId.size() >= 1 && data.driverId.size() <= 128 &&
+             data.passengerId is string && data.passengerId.size() >= 1 && data.passengerId.size() <= 128 &&
+             data.latitude is number && data.latitude >= -90.0 && data.latitude <= 90.0 &&
+             data.longitude is number && data.longitude >= -180.0 && data.longitude <= 180.0 &&
+             data.accuracyMeters is number && data.accuracyMeters >= 0 &&
+             (!('speedMps' in data) || data.speedMps is number) &&
+             data.cumulativeDistanceKm is number && data.cumulativeDistanceKm >= 0 &&
+             data.runningFareLkr is number && data.runningFareLkr >= 0 &&
+             data.recordedAt is timestamp && data.recordedAt <= request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.titleEn is string && data.titleEn.size() >= 1 && data.titleEn.size() <= 100 &&
+             data.titleSi is string && data.titleSi.size() >= 1 && data.titleSi.size() <= 140 &&
+             data.bodyEn is string && data.bodyEn.size() >= 1 && data.bodyEn.size() <= 300 &&
+             data.bodySi is string && data.bodySi.size() >= 1 && data.bodySi.size() <= 400 &&
+             data.type in ['TRIP', 'DRIVER', 'PROMO', 'SYSTEM', 'SOS'] &&
+             (!('tripId' in data) || data.tripId == null || (data.tripId is string && data.tripId.size() <= 128)) &&
+             data.isRead is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidComplaint(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             (!('tripId' in data) || data.tripId == null || (data.tripId is string && data.tripId.size() <= 128)) &&
+             data.category in ['FARE_DISPUTE', 'DRIVER_BEHAVIOR', 'SAFETY_SOS', 'PAYMENT', 'LOST_ITEM', 'OTHER'] &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 120 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
+             data.status in ['OPEN', 'IN_REVIEW', 'RESOLVED'] &&
+             (!('adminResponse' in data) || data.adminResponse == null || (data.adminResponse is string && data.adminResponse.size() <= 500)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPromotion(data) {
+      return data.code is string && data.code.size() >= 2 && data.code.size() <= 24 &&
+             data.titleEn is string && data.titleEn.size() >= 1 && data.titleEn.size() <= 100 &&
+             data.titleSi is string && data.titleSi.size() >= 1 && data.titleSi.size() <= 140 &&
+             data.discountPercent is int && data.discountPercent >= 1 && data.discountPercent <= 90 &&
+             data.maxDiscountLkr is number && data.maxDiscountLkr >= 0 &&
+             data.isActive is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminAccount(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+             data.role in ['SUPER_ADMIN', 'OPERATIONS', 'FINANCE'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAuditLog(data) {
+      return data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+             (!('actorEmail' in data) || data.actorEmail == null || (data.actorEmail is string && data.actorEmail.size() <= 160)) &&
+             data.action is string && data.action.size() >= 1 && data.action.size() <= 80 &&
+             data.targetType is string && data.targetType.size() >= 1 && data.targetType.size() <= 60 &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.details is string && data.details.size() >= 1 && data.details.size() <= 500 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Users (Private PII)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isValidId(userId) && isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().isSuspended == false &&
+                       incoming().activeMode in ['passenger', 'driver'] &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isValidId(userId) && isSignedIn() && isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (request.auth.uid == userId &&
+                          incoming().isSuspended == existing().isSuspended &&
+                          incoming().activeMode in ['passenger', 'driver'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'phone', 'preferredLanguage', 'activeMode', 'emergencyContact', 'ratingAvg', 'totalTrips', 'updatedAt']))
+                       );
+
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // 2. Drivers (Operational profile & GPS)
+    match /drivers/{driverId} {
+      allow get: if isValidId(driverId) && isSignedIn() &&
+                    (request.auth.uid == driverId || existing().verificationStatus == 'APPROVED' || isAdmin());
+      allow list: if isSignedIn() &&
+                     (existing().userId == request.auth.uid ||
+                      (existing().verificationStatus == 'APPROVED' && existing().isOnline == true) ||
+                      isAdmin());
+
+      allow create: if isValidId(driverId) && isSignedIn() &&
+                       request.auth.uid == driverId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().verificationStatus == 'PENDING' &&
+                       incoming().isOnline == false &&
+                       isValidDriverProfile(incoming());
+
+      allow update: if isValidId(driverId) && isSignedIn() && isValidDriverProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         // Driver updating own GPS/online status (cannot self-approve!)
+                         (request.auth.uid == driverId &&
+                          incoming().verificationStatus == existing().verificationStatus &&
+                          (incoming().isOnline == false || existing().verificationStatus == 'APPROVED') &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'displayName', 'vehicleType', 'vehicleModel', 'plateNumber', 'vehicleColor',
+                            'isOnline', 'latitude', 'longitude', 'heading', 'gpsAccuracyMeters',
+                            'completedTrips', 'totalEarningsLkr', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isValidId(driverId) && isAdmin();
+    }
+
+    // 3. Driver Documents (Private KYC)
+    match /driver_documents/{driverId} {
+      allow get: if isValidId(driverId) && isSignedIn() && (request.auth.uid == driverId || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isValidId(driverId) && isSignedIn() &&
+                       request.auth.uid == driverId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().verificationStatus == 'PENDING' &&
+                       isValidDriverDocument(incoming());
+
+      allow update: if isValidId(driverId) && isSignedIn() && isValidDriverDocument(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (request.auth.uid == driverId &&
+                          incoming().verificationStatus == 'PENDING' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'nicNumber', 'licenceNumber', 'licenceImageUri', 'vehicleDocImageUri',
+                            'insuranceExpiry', 'verificationStatus', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isValidId(driverId) && isAdmin();
+    }
+
+    // 4. Fare Settings (LKR rates per vehicle category)
+    match /fare_settings/{vehicleType} {
+      allow get: if isValidId(vehicleType) && isSignedIn() && (existing().isActive == true || isAdmin());
+      allow list: if isSignedIn() && (existing().isActive == true || isAdmin());
+      allow create, update: if isValidId(vehicleType) && isAdmin() && isValidFareSetting(incoming());
+      allow delete: if isValidId(vehicleType) && isAdmin();
+    }
+
+    // 5. Trips (Complete Ride Lifecycle & Digital Meter)
+    match /trips/{tripId} {
+      allow get: if isValidId(tripId) && isSignedIn() && (
+        existing().passengerId == request.auth.uid ||
+        existing().driverId == request.auth.uid ||
+        (existing().status == 'REQUESTED' && isApprovedDriver()) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().passengerId == request.auth.uid ||
+        existing().driverId == request.auth.uid ||
+        existing().status == 'REQUESTED' ||
+        isAdmin()
+      );
+
+      allow create: if isValidId(tripId) && isSignedIn() &&
+                       incoming().passengerId == request.auth.uid &&
+                       (!('driverId' in incoming()) || incoming().driverId == null) &&
+                       incoming().status == 'REQUESTED' &&
+                       isValidTrip(incoming());
+
+      allow update: if isValidId(tripId) && isSignedIn() && isValidTrip(incoming()) &&
+                       incoming().passengerId == existing().passengerId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         // Action 1: Approved driver atomically accepts a REQUESTED trip
+                         (existing().status == 'REQUESTED' &&
+                          (!('driverId' in existing()) || existing().driverId == null) &&
+                          incoming().status == 'ACCEPTED' &&
+                          incoming().driverId == request.auth.uid &&
+                          isApprovedDriver() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'driverId', 'driverName', 'vehiclePlate', 'status',
+                            'driverLat', 'driverLng', 'driverHeading', 'updatedAt'
+                          ])) ||
+                         // Action 2: Assigned driver advances trip state, updates live GPS & digital meter
+                         (existing().driverId == request.auth.uid &&
+                          existing().status in ['ACCEPTED', 'DRIVER_ARRIVED', 'STARTED'] &&
+                          incoming().driverId == existing().driverId &&
+                          incoming().status in ['ACCEPTED', 'DRIVER_ARRIVED', 'STARTED', 'COMPLETED'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'status', 'paymentStatus', 'meterDistanceKm', 'meterDurationSec', 'meterWaitingSec',
+                            'baseFareLkr', 'distanceChargeLkr', 'timeChargeLkr', 'waitingChargeLkr',
+                            'additionalChargesLkr', 'finalFareLkr', 'driverLat', 'driverLng',
+                            'driverHeading', 'lastGpsTimestampMs', 'lastGpsAccuracyM', 'updatedAt'
+                          ])) ||
+                         // Action 3: Passenger cancels before trip starts
+                         (existing().passengerId == request.auth.uid &&
+                          existing().status in ['REQUESTED', 'ACCEPTED', 'DRIVER_ARRIVED'] &&
+                          incoming().status == 'CANCELLED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'status', 'cancellationReason', 'cancelledBy', 'updatedAt'
+                          ])) ||
+                         // Action 4: Assigned driver cancels before trip starts
+                         (existing().driverId == request.auth.uid &&
+                          existing().status in ['ACCEPTED', 'DRIVER_ARRIVED'] &&
+                          incoming().status == 'CANCELLED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'status', 'cancellationReason', 'cancelledBy', 'updatedAt'
+                          ])) ||
+                         // Action 5: Passenger updates payment method/refund or submits rating on COMPLETED trip
+                         (existing().passengerId == request.auth.uid &&
+                          existing().status == 'COMPLETED' &&
+                          incoming().status == 'COMPLETED' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'paymentMethod', 'paymentStatus', 'passengerRating', 'passengerReview', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isValidId(tripId) && isAdmin();
+
+      // 5a. GPS History Subcollection
+      match /gps_history/{pointId} {
+        allow get, list: if isSignedIn() && (
+          existing().driverId == request.auth.uid ||
+          existing().passengerId == request.auth.uid ||
+          isAdmin()
+        );
+        allow create: if isValidId(tripId) && isValidId(pointId) && isSignedIn() &&
+                         incoming().tripId == tripId &&
+                         incoming().driverId == request.auth.uid &&
+                         isValidGpsBreadcrumb(incoming());
+        allow update, delete: if false;
+      }
+    }
+
+    // 6. Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(notificationId) && isSignedIn() &&
+                       (incoming().userId == request.auth.uid || isAdmin()) &&
+                       isValidNotification(incoming());
+      allow update: if isValidId(notificationId) && isSignedIn() && isValidNotification(incoming()) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 7. Complaints & Support Tickets
+    match /complaints/{complaintId} {
+      allow get: if isValidId(complaintId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(complaintId) && isSignedIn() &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'OPEN' &&
+                       isValidComplaint(incoming());
+      allow update: if isValidId(complaintId) && isSignedIn() && isValidComplaint(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isAdmin();
+      allow delete: if isValidId(complaintId) && isAdmin();
+    }
+
+    // 8. Promotions
+    match /promotions/{promoId} {
+      allow get, list: if isSignedIn() && (existing().isActive == true || isAdmin());
+      allow create, update, delete: if isValidId(promoId) && isAdmin() && isValidPromotion(incoming());
+    }
+
+    // 9. Admin Accounts
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isValidId(adminId) && isAdmin() && isValidAdminAccount(incoming());
+      allow delete: if isValidId(adminId) && isAdmin();
+    }
+
+    // 10. Audit Logs (Append-only)
+    match /audit_logs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(logId) && isSignedIn() &&
+                       incoming().actorUid == request.auth.uid &&
+                       isValidAuditLog(incoming());
+      allow update, delete: if false;
+    }
+  }
+}

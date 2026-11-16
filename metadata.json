@@ -1,0 +1,6 @@
+{
+  "name": "Mathra Taxi",
+  "description": "Sri Lanka taxi booking platform featuring Passenger, Driver, Digital Taxi Meter, live GPS tracking, and Admin Console.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
